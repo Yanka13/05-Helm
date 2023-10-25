@@ -15,5 +15,5 @@ with DAG('postgres_dag',
     run_sql = PostgresOperator(
         task_id='run_sql',
         postgres_conn_id='postgres_default',  # Use the connection ID you created
-        sql='SELECT * FROM your_table;',
+        sql='SELECT * FROM races;',
     )
