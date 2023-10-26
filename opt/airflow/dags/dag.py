@@ -3,6 +3,7 @@ from airflow import DAG
 import uuid
 from airflow.providers.postgres.operators.postgres import PostgresOperator
 from airflow.utils.trigger_rule import TriggerRule
+
 default_args = {
     'owner': 'me',
     'start_date': datetime(2023, 10, 25),
