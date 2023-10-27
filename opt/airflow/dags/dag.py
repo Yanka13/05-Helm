@@ -35,7 +35,7 @@ insert_data = PostgresOperator(
     postgres_conn_id='postgres',  # replace with your connection id
     sql="""
         INSERT INTO test_table (name)
-        VALUES ('John Doe'), ('Jane Doe');
+        VALUES ('Lewis Hamilton'), ('Zinedine Zidane');
     """,
     dag=dag,
 )

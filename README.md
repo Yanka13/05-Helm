@@ -1,100 +1,58 @@
-# Helm ⛑
+# Airflow Kubernetes Deployment Guide
 
-Helm helps us automate the deployment of complex k8s from **charts** which can be seen like recipes for settings up complex structures on k8s. You can have a look at available **charts** on https://artifacthub.io/ .
-
-🎯 In this challenge we will use helm to deploy a complex `airflow` setup to our cluster!
-
-
-## 1️⃣ Setup
-
-To install helm use:
-
-```
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-```
-
-Then make sure we have a fresh **minikube** cluster running and ready to go!
-
-To add the **airflow chart** to our local computer
+This document provides a step-by-step guide for deploying Apache Airflow on a Kubernetes cluster. The instructions are meant to be executed in order, each command fulfilling a specific part of the setup and configuration process.
 
 ```bash
-helm repo add airflow-stable https://airflow-helm.github.io/charts
-helm repo update
-```
-
-Next make a copy of the `.env.copy` as your own `.env`. We are going to fill out some of the values. The `AIRFLOW_NAME` is what we will name our deployed `chart`. Then we will also use `AIRFLOW_NAMESPACE` to use kubectl namespaces.
-
-```
-AIRFLOW__WEBSERVER__SECRET_KEY=###
-AIRFLOW__CORE__FERNET_KEY=###
-```
-
-Are for security
-
-Generate the `AIRFLOW__WEBSERVER__SECRET_KEY` with:
-
-```bash
-python -c 'import os; print(os.urandom(16))'
-```
-
-and the `AIRFLOW__CORE__FERNET_KEY` with:
-
-```python
-from cryptography.fernet import Fernet
-
-fernet_key = Fernet.generate_key()
-print(fernet_key.decode())
-```
-
-Now also clone the `helm-value.yaml.copy` and we are ready to go!
-
-## 2️⃣ Creating airflow
-
-Lets create our own namespace.
-
-```bash
+# Create a new namespace for the Airflow deployment
 kubectl create namespace $AIRFLOW_NAMESPACE
-```
 
-To access stuff in this namespace we have to append every `kubectl` with `-n airflow`. Lets instead set this as our current namespace:
-
-```bash
+# Set the current context to the newly created namespace
 kubectl config set-context --current --namespace=airflow
-```
 
-Creating our **secrets** 🔐
-
-```bash
+# Create secrets for encrypting sensitive data
 kubectl create secret generic airflow-fernet-key --namespace="$AIRFLOW_NAMESPACE" --from-literal=value=$AIRFLOW__CORE__FERNET_KEY
-```
-
-```bash
 kubectl create secret generic airflow-webserver-secret-key --namespace="$AIRFLOW_NAMESPACE" --from-literal=value=$AIRFLOW__WEBSERVER__SECRET_KEY
-```
+kubectl create secret generic airflow-pg-password --namespace="$AIRFLOW_NAMESPACE" --from-literal=password=$POSTGRES_PASSWORD
+kubectl create secret generic airflow-pg-user --namespace="$AIRFLOW_NAMESPACE" --from-literal=username=$POSTGRES_USER
 
-Now we can apply our chart and options 👇
+# Apply the PostgreSQL configuration to the cluster
+kubectl apply -f postgres.yaml --namespace=airflow
 
-```bash
+# Copy a database file to the PostgreSQL pod and execute it to set up the database
+kubectl cp f1db.sql postgres-statefulset-0:f1db.sql
+kubectl exec postgres-statefulset-0 -- psql -f f1db.sql --user=airflow f1
+
+# Install Airflow using the official Helm chart
 helm install \
   "$AIRFLOW_NAME" \
   airflow-stable/airflow \
   --namespace "$AIRFLOW_NAMESPACE" \
   --version "8.6.1" \
   --values ./helm-values.yaml
+
+# Retrieve the manifest of the installed Airflow release
+helm get manifest $AIRFLOW_NAME > outputs.yaml   
 ```
 
-Now go and make a coffee ☕️ this will take a little while.
+## Understanding the Airflow Pods
 
-When you come back and checkout your cluster you will see all the **pods** you need created!
+Once the above steps are executed successfully, you'll notice several pods running in your Kubernetes cluster, each serving a unique purpose in the Airflow deployment:
 
-## 3️⃣ Making ready for production
+1. airflow-cluster-db-migrations
+Handles database migrations ensuring the database schema is up-to-date with the Airflow version being deployed.
 
-Add a real db 💿
+2. airflow-cluster-pgbouncer
+Manages and optimizes PostgreSQL database connections using PgBouncer, a connection pooler.
 
-```bash
-kubectl create secret generic airflow-pg-password --namespace="$AIRFLOW_NAMESPACE" --from-literal=password=$POSTGRES_PASSWORD
-```
+3. airflow-cluster-scheduler
+Runs the Airflow scheduler monitoring all tasks and DAGs, and triggering task instances based on their schedules.
 
-```bash
-kubectl create secret generic airflow-pg-user --namespace="$AIRFLOW_NAMESPACE" --from-literal=username=$POSTGRES_USER
-```
+4. airflow-cluster-sync-users
+Likely responsible for syncing user accounts and permissions within Airflow.
+
+
+5. airflow-cluster-triggerer
+Manages the triggering of jobs as a new component introduced in Airflow 2.0 and above.
+
+6. airflow-cluster-web
+Runs the Airflow webserver providing the web UI for monitoring and managing the Airflow environment.
