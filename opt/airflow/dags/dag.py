@@ -13,7 +13,7 @@ dag = DAG(
     'postgres_test',
     default_args=default_args,
     description='A simple tutorial DAG',
-    schedule_interval='@daily',
+    schedule_interval='* * * * *',
 )
 
 # Create Table Task
